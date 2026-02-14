@@ -1,14 +1,11 @@
 :root{
   --bg:#0c111b;
-  --panel:#111a2b;
-  --panel2:#0f1726;
   --text:#e6e9f2;
   --muted:#a8b0c2;
   --border:rgba(255,255,255,.08);
   --accent:#8aa4ff;
   --good:#46e6ad;
   --bad:#ff6b8a;
-  --warn:#ffd27a;
 
   --shadow: 0 16px 50px rgba(0,0,0,.45);
   --radius: 18px;
@@ -120,7 +117,7 @@ h1{
   font-weight: 750;
   cursor:pointer;
   transition: transform .05s ease, background .18s ease, border-color .18s ease;
-  min-height: 42px; /* better for touch */
+  min-height: 42px;
 }
 .btn:hover{ background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.14); }
 .btn:active{ transform: translateY(1px); }
@@ -132,10 +129,7 @@ h1{
 .btnDanger:hover{ background: rgba(255,107,138,.18); border-color: rgba(255,107,138,.42); }
 
 .btnGhost{ background: transparent; }
-
-.btnSoft{
-  background: rgba(255,255,255,.03);
-}
+.btnSoft{ background: rgba(255,255,255,.03); }
 
 .input{
   width:100%;
@@ -204,7 +198,9 @@ h1{
   margin-top:12px;
 }
 
+/* IMPORTANT: helps mobile scrolling not act like taps */
 .opt{
+  touch-action: pan-y;
   border: 1px solid var(--border);
   background: rgba(0,0,0,.14);
   border-radius: 16px;
@@ -303,7 +299,7 @@ h1{
 .hide{ display:none !important; }
 .h3{ margin:0 0 8px; }
 
-/* Reviewer modal: softer overlay */
+/* Reviewer modal: soft overlay */
 .overlay{
   position: fixed;
   inset: 0;
@@ -338,7 +334,6 @@ h1{
   color: var(--text);
 }
 
-/* Phone tweaks */
 @media (max-width: 520px){
   .cardBd{ padding:12px; }
   .qText{ font-size: 15.5px; }

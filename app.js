@@ -40,7 +40,7 @@ function downloadFile(filename, text){
 }
 
 /* Persist across reload, clear on tab close */
-const SESSION_KEY = "mcq_reviewer_state_v5_scrollsafe";
+const SESSION_KEY = "mcq_reviewer_state_v6_scroll_cancels_autonext";
 function loadSession(){
   try{ return JSON.parse(sessionStorage.getItem(SESSION_KEY) || "null"); }catch{ return null; }
 }
@@ -58,7 +58,9 @@ let idx = 0;
 let score = 0;
 let answered = [];
 let locked = false;
+
 let autoNextTimer = null;
+let autoNextArmed = false; // <<< important: whether a correct-answer auto-next is currently armed
 
 let isReviewerMode = false;
 let quizPlaceholder = null;
@@ -67,12 +69,40 @@ const AUTO_NEXT_MS = 1100;
 
 /* ---------------------------
    Scroll-safe tap protection
+   + cancel auto-next if scroll happens
 ---------------------------- */
 let lastScrollTs = 0;
-function markScrolled(){ lastScrollTs = Date.now(); }
 
-// capture scroll anywhere (page + modal)
+function cancelAutoNextOnScroll(){
+  // If auto-next is waiting and user scrolls, cancel it permanently for this question.
+  if(autoNextTimer){
+    clearTimeout(autoNextTimer);
+    autoNextTimer = null;
+  }
+  if(autoNextArmed){
+    autoNextArmed = false; // cancel arm
+    // Ensure Next button is available (so user can continue manually)
+    const nextBtn = $("#btnNext");
+    if(nextBtn) nextBtn.classList.remove("hide");
+  }
+}
+
+function markScrolled(){
+  lastScrollTs = Date.now();
+  cancelAutoNextOnScroll();
+}
+
+// scroll event doesn't bubble, so capture = true is important
 document.addEventListener("scroll", markScrolled, { passive: true, capture: true });
+window.addEventListener("scroll", markScrolled, { passive: true, capture: true });
+
+// also listen to modal scroll directly (extra safety for phones)
+window.addEventListener("load", () => {
+  const modal = document.querySelector(".modal");
+  if(modal){
+    modal.addEventListener("scroll", markScrolled, { passive: true });
+  }
+});
 
 // Block "clicks" that are really scroll-drags
 function wireScrollSafeTap(el){
@@ -89,7 +119,7 @@ function wireScrollSafeTap(el){
     if (dx > 12 || dy > 12) el.dataset.drag = "1";
   }, { passive: true });
 
-  // If it was a drag or recent scroll, cancel click that would select the radio
+  // If it was a drag or very recent scroll, cancel click that would select the radio
   el.addEventListener("click", (e) => {
     const recentlyScrolled = (Date.now() - lastScrollTs) < 220;
     if (el.dataset.drag === "1" || recentlyScrolled) {
@@ -99,19 +129,18 @@ function wireScrollSafeTap(el){
   }, true);
 }
 
-// Auto-next, but NEVER while user is actively scrolling
+// Auto-next that can be canceled by any scroll
 function scheduleAutoNext(){
   clearTimeout(autoNextTimer);
+  autoNextArmed = true;
 
-  const tick = () => {
-    if ((Date.now() - lastScrollTs) < 220) {
-      autoNextTimer = setTimeout(tick, 220);
-      return;
-    }
+  autoNextTimer = setTimeout(() => {
+    // Only proceed if still armed (meaning user did NOT scroll)
+    autoNextTimer = null;
+    if(!autoNextArmed) return;
+    autoNextArmed = false;
     nextQuestion();
-  };
-
-  autoNextTimer = setTimeout(tick, AUTO_NEXT_MS);
+  }, AUTO_NEXT_MS);
 }
 
 /* ---------------------------
@@ -322,6 +351,7 @@ function prepareQuizFresh(){
 
   clearTimeout(autoNextTimer);
   autoNextTimer = null;
+  autoNextArmed = false;
 }
 
 function updateKPIs(){
@@ -352,6 +382,11 @@ function renderQuestion(){
   const q = quizQuestions[idx];
   if(!q) return;
 
+  // reset auto-next for new question
+  clearTimeout(autoNextTimer);
+  autoNextTimer = null;
+  autoNextArmed = false;
+
   $("#quizEmpty").classList.add("hide");
   $("#resultArea").classList.add("hide");
   $("#quizArea").classList.remove("hide");
@@ -374,8 +409,6 @@ function renderQuestion(){
       <div class="t">${escapeHtml(o.text)}</div>
     `;
     form.appendChild(label);
-
-    // scroll-safe: prevent accidental select while scrolling
     wireScrollSafeTap(label);
   });
 
@@ -384,7 +417,6 @@ function renderQuestion(){
   $("#fbTag").className = "tag";
   $("#fbText").textContent = "";
 
-  // Auto-submit on tap/click (but ignore if user just scrolled)
   form.onchange = () => {
     if(locked) return;
     if ((Date.now() - lastScrollTs) < 220) return;
@@ -392,7 +424,7 @@ function renderQuestion(){
     if(checked) submitAnswer();
   };
 
-  // If this question was already answered (restore on reload), show the state
+  // Restore answered state
   const prev = answered[idx];
   if(prev && prev.chosenKey){
     const input = form.querySelector(`input[value="${CSS.escape(prev.chosenKey)}"]`);
@@ -429,7 +461,8 @@ function showFeedback(isCorrect, chosenKey){
 
   $("#fbText").innerHTML =
     `<div class="fbLine"><span class="mono">${escapeHtml(ansLine)}</span></div>` +
-    `<div class="fbLine">${escapeHtml(exp)}</div>`;
+    `<div class="fbLine">${escapeHtml(exp)}</div>` +
+    (isCorrect ? `<div class="fbLine"><span class="mono">(Auto-next cancels if you scroll)</span></div>` : "");
 }
 
 function submitAnswer(){
@@ -452,15 +485,20 @@ function submitAnswer(){
   updateKPIs();
   persist();
 
+  // if correct, arm auto-next — but any scroll cancels it
   clearTimeout(autoNextTimer);
+  autoNextTimer = null;
+  autoNextArmed = false;
+
   if(isCorrect){
-    scheduleAutoNext(); // scroll-safe auto-next
+    scheduleAutoNext();
   }
 }
 
 function nextQuestion(){
   clearTimeout(autoNextTimer);
   autoNextTimer = null;
+  autoNextArmed = false;
 
   locked = false;
   idx += 1;
@@ -570,7 +608,6 @@ $("#btnStart").addEventListener("click", () => {
 
   enterReviewerMode();
 
-  // Resume if already in-progress; otherwise start fresh
   if(!quizQuestions.length || idx >= quizQuestions.length){
     prepareQuizFresh();
   }
@@ -581,9 +618,9 @@ $("#btnStart").addEventListener("click", () => {
 });
 
 $("#btnNext").addEventListener("click", () => {
-  // if already answered and correct, timer might be waiting; stop it.
   clearTimeout(autoNextTimer);
   autoNextTimer = null;
+  autoNextArmed = false;
   nextQuestion();
 });
 
@@ -603,6 +640,10 @@ $("#btnClearSession").addEventListener("click", () => {
   score = 0;
   answered = [];
   locked = false;
+
+  clearTimeout(autoNextTimer);
+  autoNextTimer = null;
+  autoNextArmed = false;
 
   $("#btnStart").disabled = true;
   $("#btnStart").textContent = "Start";

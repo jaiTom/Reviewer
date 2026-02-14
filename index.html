@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>MCQ PDF Reviewer</title>
+
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- Load local PDF.js ESM build and create module worker -->
+  <script type="module">
+    window.pdfjsReady = (async () => {
+      const pdfjsLib = await import("./lib/pdf.mjs");
+      pdfjsLib.GlobalWorkerOptions.workerPort =
+        new Worker("./lib/pdf.worker.mjs", { type: "module" });
+      window.pdfjsLib = pdfjsLib;
+      return true;
+    })();
+  </script>
+
+  <script src="app.js" defer></script>
+</head>
+
+<body>
+  <div class="wrap">
+    <header class="top">
+      <div class="titleBox">
+        <h1>Reviewer</h1>
+        <p class="sub">
+          Upload PDF → parse MCQs → randomized quiz with instant feedback. Everything stays in your browser.
+        </p>
+      </div>
+
+      <div class="headerPills">
+        <span class="pill">Rev02_Potato</span>
+      </div>
+    </header>
+
+    <main class="grid">
+      <!-- Quiz card (will be moved into reviewer modal when needed) -->
+      <section class="card" id="quizCard">
+        <div class="cardHd">
+          <h2>Quiz</h2>
+          <div class="row">
+            <button class="btn btnGhost" id="btnRestart" type="button" disabled>Reset</button>
+            <button class="btn btnDanger" id="btnClearSession" type="button">Clear</button>
+          </div>
+        </div>
+
+        <div class="cardBd">
+          <div class="status">
+            <div class="kpi">
+              <div class="kpiVal" id="kpiQ">0/0</div>
+              <div class="kpiLab">progress</div>
+            </div>
+            <div class="kpi">
+              <div class="kpiVal" id="kpiScore">0</div>
+              <div class="kpiLab">score</div>
+            </div>
+            <div class="kpi">
+              <div class="kpiVal" id="kpiParsed">0</div>
+              <div class="kpiLab">parsed</div>
+            </div>
+          </div>
+
+          <div class="bar"><div id="progressFill"></div></div>
+
+          <div class="sep"></div>
+
+          <div id="quizEmpty" class="muted">
+            Upload a PDF → click <span class="mono">Parse</span> → click <span class="mono">Start</span>.
+            <br/>Your quiz will continue even if you refresh.
+          </div>
+
+          <div id="quizArea" class="hide">
+            <div class="qText" id="qText"></div>
+            <form id="optForm" class="opts" aria-label="options"></form>
+
+            <div class="row mt">
+              <button class="btn hide" id="btnNext" type="button">Next</button>
+            </div>
+
+            <div class="feedback" id="feedback">
+              <span class="tag" id="fbTag"></span>
+              <div class="fbLine" id="fbText"></div>
+            </div>
+          </div>
+
+          <div id="resultArea" class="hide mt2">
+            <div class="sep"></div>
+            <h3 class="h3">Review</h3>
+            <p class="muted" id="resultSummary"></p>
+            <div class="list" id="reviewList"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Import / settings -->
+      <aside class="card">
+        <div class="cardHd">
+          <h2>Import</h2>
+          <div class="row">
+            <button class="btn btnSoft" id="btnPasteMode" type="button">Paste</button>
+          </div>
+        </div>
+
+        <div class="cardBd">
+          <input class="input" id="pdfFile" type="file" accept="application/pdf" />
+
+          <div class="row mt">
+            <button class="btn btnPrimary" id="btnParse" type="button">Parse</button>
+            <button class="btn btnPrimary" id="btnStart" type="button" disabled>Start</button>
+          </div>
+
+          <p class="hint">
+            Answer section supported:
+            <br><span class="mono">Answer Explanations</span>
+            <br><span class="mono">1. Correct answer: D</span>
+            <br><span class="mono">(reason lines...)</span>
+          </p>
+
+          <div class="sep"></div>
+
+          <div class="row">
+            <div class="tog">
+              <label for="togShuffleQ">Shuffle questions</label>
+              <input id="togShuffleQ" type="checkbox" checked />
+            </div>
+            <div class="tog">
+              <label for="togShuffleO">Shuffle options</label>
+              <input id="togShuffleO" type="checkbox" />
+            </div>
+          </div>
+
+          <div class="sep"></div>
+
+          <div class="row">
+            <button class="btn" id="btnExportJson" type="button" disabled>Export JSON</button>
+          </div>
+
+          <div id="pasteBox" class="hide mt">
+            <textarea class="input" id="pasteText" rows="10" placeholder="Paste MCQ text here..."></textarea>
+            <div class="row mt">
+              <button class="btn btnPrimary" id="btnParsePaste" type="button">Parse pasted text</button>
+              <button class="btn" id="btnClosePaste" type="button">Close</button>
+            </div>
+          </div>
+
+          <div class="sep"></div>
+          <p class="muted" id="log"></p>
+        </div>
+      </aside>
+    </main>
+  </div>
+
+  <!-- Reviewer Mode modal (soft, eye-friendly) -->
+  <div id="reviewerOverlay" class="overlay hide" aria-hidden="true">
+    <div class="modal">
+      <div class="modalTop">
+        <div class="modalTitle">Reviewer Mode</div>
+        <button class="btn btnGhost" id="btnExitReviewer" type="button">Back</button>
+      </div>
+      <div id="reviewerMount"></div>
+    </div>
+  </div>
+</body>
+</html>
